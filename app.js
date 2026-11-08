@@ -510,7 +510,12 @@
       html: c.html, unit: c.unit,
       get: (it, i) => {
         if (c.row) return String(i + 1);
-        if (c.raw) return String(it.es.rows[it.r._row][it.exp.columns.findIndex((k) => k.key === c.raw)]).trim().replace(',', '.');
+        if (c.raw) {
+          const txt = String(it.es.rows[it.r._row][it.exp.columns.findIndex((k) => k.key === c.raw)]).trim().replace(',', '.');
+          if (c.dec == null) return txt;
+          const p = Lab.parseNum(txt); // ör. üç okumanın ortalaması 0.2248 → tabloda 0.225
+          return p.value === undefined ? txt : f(p.value, c.dec);
+        }
         return fmtOut(c, it.r[c.key]);
       },
     }));

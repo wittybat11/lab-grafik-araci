@@ -121,12 +121,24 @@ const MEMORY_OPT = {
   def: true,
 };
 
+const ROUND_OPT = {
+  key: 'round',
+  label: 'Elle hesaptaki gibi ara sonuçları 3 ondalığa yuvarla',
+  hint: 'İşaretliyse v<sub>1</sub> ve v<sub>2</sub> 3 ondalığa yuvarlanır, a bu yuvarlanmış hızlardan hesaplanıp yine yuvarlanır; hata yüzdesi de bu a ile bulunur. Raporunuzdaki tablo ve örnek hesap bu şekilde yapıldıysa grafik ve fit onlarla birebir aynı çıkar.',
+  def: false,
+};
+
+/** 3 ondalığa yuvarlama (kayan nokta artıklarına karşı önce 12 anlamlı basamağa indirilir). */
+const r3 = (x) => Math.round(Number(x.toPrecision(12)) * 1000) / 1000;
+
 function d3Calc(v, ctx) {
-  const L = ctx.c.L / 100, dt = ctx.c.dt, mem = ctx.opts.memory;
+  const L = ctx.c.L / 100, dt = ctx.c.dt, mem = ctx.opts.memory, rnd = ctx.opts.round;
   const t2p = mem ? v.t2 - v.t1 : v.t2;
   if (!(t2p > 0)) return { cellErr: { t2: 'hafıza okuması (t₁ + t₂) t₁’den büyük olmalı' } };
-  const v1 = L / v.t1, v2 = L / t2p;
-  const a = (v2 - v1) / v.t3;
+  let v1 = L / v.t1, v2 = L / t2p;
+  if (rnd) { v1 = r3(v1); v2 = r3(v2); }
+  let a = (v2 - v1) / v.t3;
+  if (rnd) a = r3(a);
   const Fa = (v.ma / 1000) * G;
   const mt = (v.m + v.ma) / 1000;
   const ath = Fa / mt;
@@ -144,7 +156,7 @@ const D3_BASE = {
     cst('L', 'Bayrak uzunluğu L', 'cm', 10),
     cst('dt', 'Zaman belirsizliği δt', 's', 0.001, chk.nonneg),
   ],
-  options: [MEMORY_OPT],
+  options: [MEMORY_OPT, ROUND_OPT],
   columns: [
     col('m', 'm', 'g', chk.pos),
     col('ma', 'm<sub>a</sub>', 'g', chk.pos),
@@ -162,9 +174,9 @@ const D3_BASE = {
       { html: 'Row', unit: '', row: true },
       { html: 'm', unit: 'g', raw: 'm' },
       { html: 'm<sub>a</sub>', unit: 'g', raw: 'ma' },
-      { html: 't<sub>1</sub>', unit: 's', raw: 't1' },
+      { html: 't<sub>1</sub>', unit: 's', raw: 't1', dec: 3 },
       { html: 't<sub>2</sub>', unit: 's', key: 't2p', dec: 3 },
-      { html: 't<sub>3</sub>', unit: 's', raw: 't3' },
+      { html: 't<sub>3</sub>', unit: 's', raw: 't3', dec: 3 },
       { html: 'v<sub>1</sub>', unit: 'm/s', key: 'v1', dec: 3 },
       { html: 'v<sub>2</sub>', unit: 'm/s', key: 'v2', dec: 3 },
       { html: 'a', unit: 'm/s²', key: 'a', dec: 3 },
