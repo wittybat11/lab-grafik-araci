@@ -50,6 +50,7 @@
       xMode: mode,
       axes: { x: p.xTitle, y: p.yTitle },
       plotOpts: { ...p.defaults },
+      copyOpts: { header: true, trial: true, inputs: false },
     };
   }
 
@@ -69,6 +70,7 @@
     d.plotOpts = { ...p.defaults };
     if (s.axes) for (const k of ['x', 'y']) if (typeof s.axes[k] === 'string') d.axes[k] = s.axes[k];
     if (s.plotOpts) for (const k of Object.keys(d.plotOpts)) if (typeof s.plotOpts[k] === 'boolean') d.plotOpts[k] = s.plotOpts[k];
+    if (s.copyOpts) for (const k of Object.keys(d.copyOpts)) if (typeof s.copyOpts[k] === 'boolean') d.copyOpts[k] = s.copyOpts[k];
     return d;
   }
 
@@ -264,7 +266,14 @@
             <h3>Hesaplanan değerler</h3>
             <button type="button" class="btn" id="copy-table">Tabloyu kopyala</button>
           </div>
+          <fieldset class="checks copy-opts">
+            <legend>Kopyalanacak tablo</legend>
+            <label class="check"><input type="checkbox" data-copt="header" ${es.copyOpts.header ? 'checked' : ''}><span>Başlık satırı</span></label>
+            <label class="check"><input type="checkbox" data-copt="trial" ${es.copyOpts.trial ? 'checked' : ''}><span>Deneme no (Trial) sütunu</span></label>
+            ${exp.id === 'free' ? '' : `<label class="check"><input type="checkbox" data-copt="inputs" ${es.copyOpts.inputs ? 'checked' : ''}><span>Ölçülen değerler (girdiğiniz sütunlar)</span></label>`}
+          </fieldset>
           <div class="table-wrap" id="calc"></div>
+          <p class="hint copy-hint" id="copy-hint"></p>
         </div>
       </section>`;
 
@@ -478,13 +487,33 @@
   const fmtOut = (o, v) => (v == null || !Number.isFinite(v) ? '' : o.dec == null ? Lab.auto(v, 6) : f(v, o.dec));
   const outHead = (o) => `${o.html}${o.unit ? ` <span class="unit">(${o.unit})</span>` : ''}`;
 
+  /** Ekranda gösterilen ve panoya kopyalanan tablo aynı modelden üretilir. */
+  function tableModel(exp, es, ev) {
+    const o = es.copyOpts, cols = [];
+    if (o.trial) cols.push({ html: 'Trial', unit: '', get: (r, i) => String(i + 1) });
+    if (o.inputs && exp.id !== 'free') {
+      exp.columns.forEach((c, j) => {
+        const html = c.key === 't2' && es.opts.memory ? 't<sub>1</sub> + t<sub>2</sub>' : c.html;
+        cols.push({ html, unit: c.unit, get: (r) => String(es.rows[r._row][j]).trim().replace(',', '.') });
+      });
+    }
+    exp.outputs.forEach((out) => cols.push({ html: out.html, unit: out.unit, get: (r) => fmtOut(out, r[out.key]) }));
+    const body = ev.valid.map((r, i) => cols.map((c) => c.get(r, i)));
+    return { cols, body };
+  }
+
   function renderCalc(exp, ev) {
-    const el = document.getElementById('calc');
-    if (!ev.valid.length) { el.innerHTML = '<p class="results-empty">Geçerli satır yok.</p>'; return; }
+    const el = document.getElementById('calc'), es = cs();
+    const hint = document.getElementById('copy-hint');
+    if (!ev.valid.length) { el.innerHTML = '<p class="results-empty">Geçerli satır yok.</p>'; hint.textContent = ''; return; }
+    const { cols, body } = tableModel(exp, es, ev);
+    const head = es.copyOpts.header;
     el.innerHTML = `<table class="calc-table">
-      <thead><tr><th scope="col">#</th>${exp.outputs.map((o) => `<th scope="col">${outHead(o)}</th>`).join('')}</tr></thead>
-      <tbody>${ev.valid.map((r) => `<tr><td>${r._row + 1}</td>${exp.outputs.map((o) => `<td>${Lab.minus(fmtOut(o, r[o.key]))}</td>`).join('')}</tr>`).join('')}</tbody>
+      <thead><tr${head ? '' : ' class="head-off" title="Başlık satırı kopyalanmayacak"'}>${cols.map((c) => `<th scope="col">${outHead(c)}</th>`).join('')}</tr></thead>
+      <tbody>${body.map((row) => `<tr>${row.map((v) => `<td>${esc(Lab.minus(v))}</td>`).join('')}</tr>`).join('')}</tbody>
     </table>`;
+    const nRows = body.length + (head ? 1 : 0);
+    hint.innerHTML = `Kopyalanacak alan: <b>${nRows} satır × ${cols.length} sütun</b>${head ? '' : ' (başlıksız)'}. Word’deki hazır tablonuza yapıştırmak için tabloda tam bu boyuttaki hücreleri seçip <b>Ctrl+V</b> yapın. Tablonuzda başlık zaten varsa “Başlık satırı”nı kaldırın.`;
   }
 
   /* ---------- Buton durumları ---------- */
@@ -656,16 +685,17 @@
 
   /* ---------- Tabloyu kopyala (Word/Excel'e tablo olarak yapışır) ---------- */
   function buildCopy() {
-    const exp = cur(), rows = lastEval.valid;
-    const headTxt = exp.outputs.map((o) => `${Lab.text(o.html)}${o.unit ? ` (${o.unit})` : ''}`);
-    const body = rows.map((r) => exp.outputs.map((o) => fmtOut(o, r[o.key])));
-    const tsv = [headTxt, ...body].map((r) => r.join('\t')).join('\r\n');
+    const exp = cur(), es = cs();
+    const { cols, body } = tableModel(exp, es, lastEval);
+    const head = es.copyOpts.header;
+    const headTxt = cols.map((c) => `${Lab.text(c.html)}${c.unit ? ` (${c.unit})` : ''}`);
+    const tsv = (head ? [headTxt, ...body] : body).map((r) => r.join('\t')).join('\r\n');
     const cell = 'border:1px solid #000;padding:2px 6px;text-align:center';
     const html = `<table style="border-collapse:collapse">
-      <tr>${exp.outputs.map((o) => `<th style="${cell}">${o.html}${o.unit ? ` (${esc(o.unit)})` : ''}</th>`).join('')}</tr>
+      ${head ? `<tr>${cols.map((c) => `<th style="${cell}">${c.html}${c.unit ? ` (${esc(c.unit)})` : ''}</th>`).join('')}</tr>` : ''}
       ${body.map((r) => `<tr>${r.map((v) => `<td style="${cell}">${esc(v)}</td>`).join('')}</tr>`).join('')}
     </table>`;
-    return { tsv, html, n: rows.length };
+    return { tsv, html, rows: body.length + (head ? 1 : 0), cols: cols.length };
   }
 
   function copyViaSelection(html) {
@@ -687,7 +717,7 @@
 
   async function copyTable() {
     if (!lastEval || !lastEval.valid.length) return;
-    const { tsv, html, n } = buildCopy();
+    const { tsv, html, rows, cols } = buildCopy();
     let ok = false;
     try {
       if (navigator.clipboard && window.ClipboardItem) {
@@ -702,7 +732,7 @@
     if (!ok && navigator.clipboard) {
       try { await navigator.clipboard.writeText(tsv); ok = true; } catch (e) { ok = false; }
     }
-    toast(ok ? `Tablo kopyalandı (${n} satır) — Word veya Excel’e yapıştırabilirsiniz` : 'Kopyalanamadı: tarayıcı panoya erişime izin vermedi.');
+    toast(ok ? `Tablo kopyalandı: ${rows} satır × ${cols} sütun — Word’de aynı boyuttaki hücreleri seçip Ctrl+V` : 'Kopyalanamadı: tarayıcı panoya erişime izin vermedi.');
   }
 
   /* =========================================================
@@ -721,6 +751,9 @@
     const t = e.target, exp = cur(), es = cs();
     if (t.dataset.opt) {
       es.opts[t.dataset.opt] = t.checked;
+      save(); refresh();
+    } else if (t.dataset.copt) {
+      es.copyOpts[t.dataset.copt] = t.checked;
       save(); refresh();
     } else if (t.dataset.popt) {
       es.plotOpts[t.dataset.popt] = t.checked;
