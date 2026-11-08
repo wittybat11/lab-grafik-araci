@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Lab Grafik Aracı — PHYS111</title>
+  <meta name="description" content="PHYS111 laboratuvar deneyleri için grafik, doğrusal fit ve rapora hazır PNG aracı.">
+  <link rel="stylesheet" href="style.css">
+  <script src="https://cdn.plot.ly/plotly-2.35.2.min.js" charset="utf-8"
+    integrity="sha384-cCVCZkAjYNxaYKbM8lsArLznDF/SvMFr1jcZrvOpSTCa0W40ZAdLzHCEulnUa5i7"
+    crossorigin="anonymous" defer></script>
+  <script src="experiments.js" defer></script>
+  <script src="app.js" defer></script>
+</head>
+<body>
+  <header class="site-header">
+    <div class="wrap">
+      <h1>Lab Grafik Aracı</h1>
+      <p>PHYS111 ölçümlerinizi girin; föydeki hesaplar yapılır, grafik ve doğrusal fit çizilir, rapor için PNG olarak indirilir.</p>
+    </div>
+  </header>
+
+  <div class="tabs-bar">
+    <nav class="wrap tabs" id="tabs" role="tablist" aria-label="Deneyler"></nav>
+  </div>
+
+  <main class="wrap layout" id="panel" role="tabpanel" tabindex="-1">
+    <noscript><p>Bu araç JavaScript gerektirir.</p></noscript>
+  </main>
+
+  <footer class="wrap site-footer">
+    <p id="storage-note">Girdiğiniz veriler yalnızca bu tarayıcıda saklanır.</p>
+  </footer>
+
+  <div class="toast" id="toast" role="status" aria-live="polite" hidden>
+    <span id="toast-msg"></span>
+    <button type="button" class="toast-action" id="toast-action" hidden></button>
+  </div>
+</body>
+</html>
