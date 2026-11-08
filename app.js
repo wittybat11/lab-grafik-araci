@@ -68,8 +68,9 @@
     const p = exp.plot(d.xMode);
     d.axes = { x: p.xTitle, y: p.yTitle };
     d.plotOpts = { ...p.defaults };
-    if (s.axes) for (const k of ['x', 'y']) if (typeof s.axes[k] === 'string') d.axes[k] = s.axes[k];
-    if (s.plotOpts) for (const k of Object.keys(d.plotOpts)) if (typeof s.plotOpts[k] === 'boolean') d.plotOpts[k] = s.plotOpts[k];
+    const sameMode = (s.xMode == null ? null : s.xMode) === d.xMode;
+    if (s.axes && sameMode) for (const k of ['x', 'y']) if (typeof s.axes[k] === 'string') d.axes[k] = s.axes[k];
+    if (s.plotOpts && sameMode) for (const k of Object.keys(d.plotOpts)) if (typeof s.plotOpts[k] === 'boolean') d.plotOpts[k] = s.plotOpts[k];
     if (s.copyOpts) for (const k of Object.keys(d.copyOpts)) if (typeof s.copyOpts[k] === 'boolean') d.copyOpts[k] = s.copyOpts[k];
     if (s.copyOpts && exp.report && ['report', 'custom'].includes(s.copyOpts.format)) d.copyOpts.format = s.copyOpts.format;
     return d;
@@ -192,7 +193,7 @@
       ${exp.columns.map((c) => `<th scope="col">${c.html}${c.unit ? ` <span class="unit">(${c.unit})</span>` : ''}${c.optional && exp.id === 'free' ? ' <span class="unit">isteğe bağlı</span>' : ''}</th>`).join('')}
       <th scope="col"><span class="sr">Sil</span></th></tr>`;
 
-    const theoryLabel = es.xMode === 'm' ? 'Teori eğrisi' : 'Teori çizgisi';
+    const theoryLabel = p.theoryName || 'Teori çizgisi';
 
     panel.innerHTML = `
       <section class="col col-input" aria-label="Veri girişi">
@@ -358,22 +359,37 @@
     }
   }
 
-  /* ---------- Grafik ---------- */
-  const PLOT_FONT = '"Times New Roman", Times, serif';
+  /* ---------- Grafik (rapordaki Python/matplotlib şekilleriyle aynı görünüm) ---------- */
+  const PLOT_FONT = '"DejaVu Serif", "Bitstream Vera Serif", Georgia, "Times New Roman", serif';
   const PLOT_CONFIG = { displayModeBar: false, responsive: true };
+  const COLORS = { data: '#1f4e79', fit: '#c00000', theory: '#808080', grid: '#e6e6e6' };
 
   function axis(title, range) {
     return {
-      title: { text: title, font: { size: 18 }, standoff: 10 },
+      title: { text: title, font: { size: 16 }, standoff: 8 },
       range,
       autorange: false,
       showline: true, linecolor: '#000', linewidth: 1, mirror: true,
-      ticks: 'outside', ticklen: 6, tickwidth: 1, tickcolor: '#000',
-      showgrid: true, gridcolor: '#e2e2e2', gridwidth: 1,
+      ticks: 'outside', ticklen: 5, tickwidth: 1, tickcolor: '#000',
+      showgrid: true, gridcolor: COLORS.grid, gridwidth: 1,
       zeroline: false,
-      tickfont: { size: 15 },
+      tickfont: { size: 14 },
       automargin: true,
     };
+  }
+
+  /** Lejanttaki katsayı: belirsizliğin 1 anlamlı basamağına göre (ör. 3.123 ± 0.047 → 3.12). */
+  function eqCoef(v, u) {
+    if (u == null || !Number.isFinite(u) || u <= Math.abs(v) * 1e-9) return Lab.auto(v, 3);
+    const dec = -Math.floor(Math.log10(Number(u.toPrecision(1))));
+    return Lab.fixed(v, Math.max(0, Math.min(10, dec)));
+  }
+
+  function fitLabel(p, fit) {
+    const eq = p.eq || { y: 'y', x: 'x' };
+    const k = eqCoef(fit.k, fit.dk), b = eqCoef(fit.b, fit.db);
+    const bNeg = b.startsWith('-');
+    return `Linear fit: ${eq.y} = ${Lab.minus(k)} ${eq.x} ${bNeg ? '−' : '+'} ${bNeg ? b.slice(1) : b}`;
   }
 
   function buildFigure(es, ev, p, fit) {
@@ -390,34 +406,37 @@
       type: 'scatter',
       mode: es.plotOpts.connect ? 'lines+markers' : 'markers',
       name: 'Measured data',
+      legendrank: 3, // matplotlib gibi: önce çizgiler, sonra ölçümler
       x: xs, y: ys,
-      marker: { color: '#000', size: 8, symbol: 'circle' },
-      line: { color: '#000', width: 1 },
+      marker: { color: COLORS.data, size: 9, symbol: 'circle' },
+      line: { color: COLORS.data, width: 2 },
       error_y: showErr
-        ? { type: 'data', array: pts.map((q) => q.e || 0), visible: true, color: '#000', thickness: 1, width: 4 }
+        ? { type: 'data', array: pts.map((q) => q.e || 0), visible: true, color: COLORS.data, thickness: 1.5, width: 4 }
         : { visible: false },
       hovertemplate: '(%{x}, %{y})<extra></extra>',
     }];
     if (fit && fit.ok) {
       traces.push({
-        type: 'scatter', mode: 'lines', name: 'Linear fit',
+        type: 'scatter', mode: 'lines', name: fitLabel(p, fit), legendrank: 1,
         x: [x0, x1], y: [fit.k * x0 + fit.b, fit.k * x1 + fit.b],
-        line: { color: '#000', width: 1.5 }, hoverinfo: 'skip',
+        line: { color: COLORS.fit, width: 2 }, hoverinfo: 'skip',
       });
     }
     if (p.theory && es.plotOpts.theory) {
       const t = p.theory(ev.valid, [x0, x1], ev.ctx);
       traces.push({
-        type: 'scatter', mode: 'lines', name: 'Theory',
+        type: 'scatter', mode: 'lines', name: p.theoryLabel ? p.theoryLabel(ev.valid) : 'Theory', legendrank: 2,
         x: t.x, y: t.y,
-        line: { color: '#7a7a7a', width: 1.5, dash: 'dash' }, hoverinfo: 'skip',
+        line: { color: COLORS.theory, width: 2, dash: 'dash' }, hoverinfo: 'skip',
       });
     }
+    // Ölçümler çizgilerin üstünde görünsün
+    traces.push(traces.shift());
 
     // y aralığı: veriler, hata çubukları ve çizgiler; lejant için üstte boşluk
     const yAll = [];
     pts.forEach((q) => { yAll.push(q.y); if (showErr && q.e) yAll.push(q.y + q.e, q.y - q.e); });
-    traces.slice(1).forEach((t) => yAll.push(...t.y));
+    traces.slice(0, -1).forEach((t) => yAll.push(...t.y));
     let ylo = Math.min(...yAll), yhi = Math.max(...yAll);
     const yspan = (yhi - ylo) || Math.abs(yhi) || 1;
     const legend = traces.length > 1;
@@ -426,7 +445,7 @@
     if (p.fromOrigin && Math.min(...ys) >= 0 && ylo < 0 && ylo > -0.1 * yspan) ylo = 0;
 
     const layout = {
-      font: { family: PLOT_FONT, size: 16, color: '#000' },
+      font: { family: PLOT_FONT, size: 15, color: '#000' },
       paper_bgcolor: '#fff', plot_bgcolor: '#fff',
       margin: { l: 70, r: 20, t: 16, b: 56 },
       xaxis: axis(es.axes.x, [x0, x1]),
@@ -434,8 +453,8 @@
       showlegend: legend,
       legend: {
         x: 0.015, y: 0.985, xanchor: 'left', yanchor: 'top',
-        bgcolor: 'rgba(255,255,255,0.92)', bordercolor: '#000', borderwidth: 1,
-        font: { size: 15 },
+        bgcolor: 'rgba(255,255,255,0.85)', bordercolor: '#cccccc', borderwidth: 1,
+        font: { size: 13 },
       },
       hovermode: 'closest',
     };
@@ -464,7 +483,7 @@
     if (!ev.valid.length) { el.innerHTML = '<p class="results-empty">Sonuçlar için ölçüm girin (fit için en az 2 geçerli satır).</p>'; return; }
     let html = '';
     if (!es.plotOpts.fit) {
-      html += '<p class="results-empty">Doğrusal fit kapalı. Eğim ve kesişim için “Doğrusal fit” kutusunu işaretleyin.</p>';
+      html += `<p class="results-empty">${p.noFitNote || 'Doğrusal fit kapalı. Eğim ve kesişim için “Doğrusal fit” kutusunu işaretleyin.'}</p>`;
     } else if (!fit.ok) {
       html += `<p class="results-empty">${fit.reason === 'samex'
         ? 'Tüm x değerleri aynı; doğru uydurulamaz.'

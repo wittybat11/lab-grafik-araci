@@ -236,6 +236,7 @@ const EXPERIMENTS = [
       fromOrigin: true,
       defaults: { fit: true, err: true, theory: false, connect: false },
       theory: null,
+      eq: { y: 'v<sub>avg</sub>', x: 'D' },
       file: 'deney2_vavg-D',
       kUnit: 's⁻¹', bUnit: 'm/s',
       interpret(fit) {
@@ -262,6 +263,8 @@ const EXPERIMENTS = [
         const mt = valid[0].mt;
         return { x: [x0, x1], y: [x0 / mt, x1 / mt] };
       },
+      eq: { y: 'a', x: 'F<sub>a</sub>' },
+      theoryLabel: (valid) => `Theory: a = F<sub>a</sub> / (${f(valid[0].mt, 3)} kg)`,
       file: 'deney3_a-Fa',
       kUnit: 'kg⁻¹', bUnit: 'm/s²',
       interpret(fit, valid) {
@@ -285,58 +288,34 @@ const EXPERIMENTS = [
     id: 'd3b',
     tab: 'Deney 3b', tabSub: 'a – m',
     title: "Deney 3b — Newton's Second Law: a – m",
-    note: 'Föy madde 5: asılı kütle m<sub>a</sub> sabit, kızak kütlesi m değiştirilir. a – m ilişkisi eğridir; x ekseni 1/(m + m<sub>a</sub>) seçilince doğrusal olur ve eğim F<sub>a</sub>’yı verir.',
-    xModes: [
-      { value: 'm', label: 'm (g)' },
-      { value: 'inv', label: '1/(m + mₐ) (kg⁻¹)' },
-    ],
-    plot(mode) {
+    note: 'Föy madde 5: asılı kütle m<sub>a</sub> sabit, kızak kütlesi m değiştirilir. Föy a – m grafiğini istiyor; ilişki doğrusal olmadığı için fit çizilmez, noktalar birleştirilir.',
+    plot() {
       const Fa0 = (valid) => valid[0].Fa;
-      const maWarn = (valid) => (spread(valid.map((r) => r.ma)) > 1e-9
-        ? [{ warn: true, html: 'm<sub>a</sub> satırlar arasında sabit değil; bu grafikte asılı kütle sabit tutulmalı.' }] : []);
-      if (mode === 'inv') {
-        return {
-          x: 'invm', y: 'a', err: 'da',
-          xTitle: '1/(m + m<sub>a</sub>) (kg<sup>−1</sup>)',
-          yTitle: 'Average acceleration a (m/s<sup>2</sup>)',
-          fromOrigin: false, // föy: 3b için orijinden başlama istenmiyor; veriler grafiği doldurur
-          defaults: { fit: true, err: true, theory: true, connect: false },
-          theory: (valid, [x0, x1]) => ({ x: [x0, x1], y: [Fa0(valid) * x0, Fa0(valid) * x1] }),
-          file: 'deney3_a-inv_m',
-          kUnit: 'N', bUnit: 'm/s²',
-          interpret(fit, valid) {
-            const Fa = Fa0(valid);
-            const L = [`Beklenen eğim F<sub>a</sub> = m<sub>a</sub>g = <b>${f(Fa, 3)} N</b>`];
-            if (fit && fit.ok) {
-              L.push(`Ölçülen eğim: <b>${pm(fit.k, fit.dk)} N</b> — beklenen eğimden fark <b>%${f(Math.abs(fit.k - Fa) / Fa * 100, 1)}</b>`);
-              L.push(`Kesişim: ${pm(fit.b, fit.db)} m/s² (ideal durumda 0)`);
-            }
-            return L.concat(maWarn(valid));
-          },
-        };
-      }
       return {
         x: 'm', y: 'a', err: 'da',
         xTitle: 'Glider mass m (g)',
         yTitle: 'Average acceleration a (m/s<sup>2</sup>)',
         fromOrigin: false,
-        defaults: { fit: false, err: true, theory: true, connect: true },
+        defaults: { fit: false, err: true, theory: false, connect: true },
         theory: (valid, [x0, x1]) => {
           const ma = valid[0].ma, Fa = Fa0(valid);
           const lo = Math.max(x0, -ma + 1e-6), xs = [], ys = [];
-          for (let i = 0; i <= 80; i++) {
-            const x = lo + (x1 - lo) * i / 80;
+          for (let k = 0; k <= 80; k++) {
+            const x = lo + (x1 - lo) * k / 80;
             xs.push(x); ys.push(Fa / ((x + ma) / 1000));
           }
           return { x: xs, y: ys };
         },
+        theoryName: 'Teori eğrisi',
+        theoryLabel: () => 'Theory: a = F<sub>a</sub> / (m + m<sub>a</sub>)',
+        eq: { y: 'a', x: 'm' },
+        noFitNote: 'a – m ilişkisi doğrusal olmadığı için föy bu grafikte fit istemiyor.',
         file: 'deney3_a-m',
         kUnit: 'm/(s²·g)', bUnit: 'm/s²',
         interpret(fit, valid) {
-          return [
-            `Teori eğrisi: a = F<sub>a</sub> / (m + m<sub>a</sub>), F<sub>a</sub> = <b>${f(Fa0(valid), 3)} N</b>`,
-            'a – m ilişkisi doğrusal değildir. Eğimden F<sub>a</sub> bulmak için x eksenini <b>1/(m + m<sub>a</sub>)</b> seçin.',
-          ].concat(maWarn(valid));
+          const L = [`m arttıkça a azalıyor; teoride a = F<sub>a</sub> / (m + m<sub>a</sub>), F<sub>a</sub> = <b>${f(Fa0(valid), 3)} N</b>`];
+          if (spread(valid.map((r) => r.ma)) > 1e-9) L.push({ warn: true, html: 'm<sub>a</sub> satırlar arasında sabit değil; bu grafikte asılı kütle sabit tutulmalı.' });
+          return L;
         },
       };
     },
@@ -387,6 +366,8 @@ const EXPERIMENTS = [
       fromOrigin: true,
       defaults: { fit: true, err: false, theory: true, connect: false },
       theory: (valid, [x0, x1]) => ({ x: [x0, x1], y: [G_ACCEPTED * x0, G_ACCEPTED * x1] }),
+      eq: { y: 'F<sub>g</sub>', x: 'm' },
+      theoryLabel: () => 'Theory: F<sub>g</sub> = 9.81 m',
       file: 'deney4_Fg-m',
       kUnit: 'm/s²', bUnit: 'N',
       interpret(fit, valid, ctx) {
@@ -423,6 +404,7 @@ const EXPERIMENTS = [
       fromOrigin: true,
       defaults: { fit: true, err: false, theory: false, connect: false },
       theory: null,
+      eq: { y: 'F', x: 'x' },
       file: 'deney5_F-x',
       kUnit: 'N/m', bUnit: 'N',
       interpret(fit) {
@@ -458,6 +440,7 @@ const EXPERIMENTS = [
       fromOrigin: false,
       defaults: { fit: true, err: true, theory: false, connect: false },
       theory: null,
+      eq: { y: 'y', x: 'x' },
       file: 'serbest_grafik',
       kUnit: '', bUnit: '',
       interpret: () => [],
