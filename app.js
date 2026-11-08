@@ -50,7 +50,7 @@
       xMode: mode,
       axes: { x: p.xTitle, y: p.yTitle },
       plotOpts: { ...p.defaults },
-      copyOpts: { header: true, trial: true, inputs: false, format: exp.report ? 'report' : 'custom' },
+      copyOpts: { header: !exp.report, trial: true, inputs: false, format: exp.report ? 'report' : 'custom' },
     };
   }
 
@@ -545,7 +545,13 @@
     </table>`;
     const nRows = body.length + (head ? 1 : 0);
     const from = counts ? ` — ${counts.map((c) => `${esc(c.tab)} sekmesinden ${c.n} satır`).join(', ')}` : '';
-    hint.innerHTML = `Kopyalanacak alan: <b>${nRows} satır × ${cols.length} sütun</b>${head ? '' : ' (başlıksız)'}${from}. Word’deki hazır tablonuza yapıştırmak için tabloda tam bu boyuttaki hücreleri seçip <b>Ctrl+V</b> yapın. Tablonuzda başlık zaten varsa “Başlık satırı”nı kaldırın.`;
+    const first = Lab.text(cols[0].html), last = Lab.text(cols[cols.length - 1].html);
+    hint.innerHTML = `<b>Kopyalanacak alan: ${nRows} satır × ${cols.length} sütun</b>${head ? ' (başlık dahil)' : ' (başlıksız)'}${from}.
+      <ol class="paste-steps">
+        <li>Word tablonuzda <b>${esc(first)}</b> sütununun ilk ${head ? 'satırından (başlık)' : 'veri hücresinden'} <b>${esc(last)}</b> sütununun ${nRows}. satırına kadar <b>${nRows} × ${cols.length} hücreyi fareyle seçin</b>.</li>
+        <li><b>Ctrl+V</b> yapın; seçili hücrelerin üzerine yazılır.</li>
+      </ol>
+      İmleci yalnızca bir hücreye koyup yapıştırırsanız Word tabloyu böler ya da her şeyi tek hücreye koyar.${head ? ' Tablonuzda başlık zaten varsa “Başlık satırı”nı kaldırın.' : ''}`;
   }
 
   /* ---------- Buton durumları ---------- */
