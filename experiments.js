@@ -287,7 +287,7 @@ const EXPERIMENTS = [
           x: 'invm', y: 'a', err: 'da',
           xTitle: '1/(m + m<sub>a</sub>) (kg<sup>−1</sup>)',
           yTitle: 'Average acceleration a (m/s<sup>2</sup>)',
-          fromOrigin: true,
+          fromOrigin: false, // föy: 3b için orijinden başlama istenmiyor; veriler grafiği doldurur
           defaults: { fit: true, err: true, theory: true, connect: false },
           theory: (valid, [x0, x1]) => ({ x: [x0, x1], y: [Fa0(valid) * x0, Fa0(valid) * x1] }),
           file: 'deney3_a-inv_m',
