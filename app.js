@@ -50,7 +50,7 @@
       xMode: mode,
       axes: { x: p.xTitle, y: p.yTitle },
       plotOpts: { ...p.defaults },
-      copyOpts: { header: true, trial: true, inputs: false },
+      copyOpts: { header: true, trial: true, inputs: false, format: exp.report ? 'report' : 'custom' },
     };
   }
 
@@ -71,6 +71,7 @@
     if (s.axes) for (const k of ['x', 'y']) if (typeof s.axes[k] === 'string') d.axes[k] = s.axes[k];
     if (s.plotOpts) for (const k of Object.keys(d.plotOpts)) if (typeof s.plotOpts[k] === 'boolean') d.plotOpts[k] = s.plotOpts[k];
     if (s.copyOpts) for (const k of Object.keys(d.copyOpts)) if (typeof s.copyOpts[k] === 'boolean') d.copyOpts[k] = s.copyOpts[k];
+    if (s.copyOpts && exp.report && ['report', 'custom'].includes(s.copyOpts.format)) d.copyOpts.format = s.copyOpts.format;
     return d;
   }
 
@@ -266,11 +267,16 @@
             <h3>Hesaplanan değerler</h3>
             <button type="button" class="btn" id="copy-table">Tabloyu kopyala</button>
           </div>
+          ${exp.report ? `<label class="select-row copy-format"><span>Tablo biçimi:</span>
+            <select id="copy-format">
+              <option value="report" ${useReport(exp, es) ? 'selected' : ''}>${exp.report.label}</option>
+              <option value="custom" ${useReport(exp, es) ? '' : 'selected'}>Özel: bu sekmenin tüm hesaplanan değerleri</option>
+            </select></label>` : ''}
           <fieldset class="checks copy-opts">
             <legend>Kopyalanacak tablo</legend>
             <label class="check"><input type="checkbox" data-copt="header" ${es.copyOpts.header ? 'checked' : ''}><span>Başlık satırı</span></label>
-            <label class="check"><input type="checkbox" data-copt="trial" ${es.copyOpts.trial ? 'checked' : ''}><span>Deneme no (Trial) sütunu</span></label>
-            ${exp.id === 'free' ? '' : `<label class="check"><input type="checkbox" data-copt="inputs" ${es.copyOpts.inputs ? 'checked' : ''}><span>Ölçülen değerler (girdiğiniz sütunlar)</span></label>`}
+            ${useReport(exp, es) ? '' : `<label class="check"><input type="checkbox" data-copt="trial" ${es.copyOpts.trial ? 'checked' : ''}><span>Deneme no (Trial) sütunu</span></label>`}
+            ${exp.id === 'free' || useReport(exp, es) ? '' : `<label class="check"><input type="checkbox" data-copt="inputs" ${es.copyOpts.inputs ? 'checked' : ''}><span>Ölçülen değerler (girdiğiniz sütunlar)</span></label>`}
           </fieldset>
           <div class="table-wrap" id="calc"></div>
           <p class="hint copy-hint" id="copy-hint"></p>
@@ -298,6 +304,7 @@
      Güncelleme: doğrulama, grafik, sonuçlar, tablo
      ========================================================= */
   let lastEval = null;
+  let lastTableRows = 0; // kopyalanacak tablodaki veri satırı sayısı
   let activeRow = null; // odaktaki satır: eksik uyarısı yazarken gösterilmez
   const focusedRow = () => { const a = document.activeElement; return a && a.dataset && a.dataset.r !== undefined ? +a.dataset.r : null; };
 
@@ -488,7 +495,30 @@
   const outHead = (o) => `${o.html}${o.unit ? ` <span class="unit">(${o.unit})</span>` : ''}`;
 
   /** Ekranda gösterilen ve panoya kopyalanan tablo aynı modelden üretilir. */
+  function useReport(exp, es) { return !!exp.report && es.copyOpts.format === 'report'; }
+
+  /** Föy tablosu: birden çok sekmenin geçerli satırları, föydeki sütun sırasıyla. */
+  function reportModel(exp, ev) {
+    const items = [], counts = [];
+    for (const id of exp.report.sources) {
+      const e2 = EXP[id], s2 = state.exps[id];
+      const ev2 = id === exp.id ? ev : evaluate(e2, s2);
+      ev2.valid.forEach((r) => items.push({ r, es: s2, exp: e2 }));
+      counts.push({ tab: e2.tab, n: ev2.valid.length });
+    }
+    const cols = exp.report.cols.map((c) => ({
+      html: c.html, unit: c.unit,
+      get: (it, i) => {
+        if (c.row) return String(i + 1);
+        if (c.raw) return String(it.es.rows[it.r._row][it.exp.columns.findIndex((k) => k.key === c.raw)]).trim().replace(',', '.');
+        return fmtOut(c, it.r[c.key]);
+      },
+    }));
+    return { cols, body: items.map((it, i) => cols.map((c) => c.get(it, i))), counts };
+  }
+
   function tableModel(exp, es, ev) {
+    if (useReport(exp, es)) return reportModel(exp, ev);
     const o = es.copyOpts, cols = [];
     if (o.trial) cols.push({ html: 'Trial', unit: '', get: (r, i) => String(i + 1) });
     if (o.inputs && exp.id !== 'free') {
@@ -505,15 +535,17 @@
   function renderCalc(exp, ev) {
     const el = document.getElementById('calc'), es = cs();
     const hint = document.getElementById('copy-hint');
-    if (!ev.valid.length) { el.innerHTML = '<p class="results-empty">Geçerli satır yok.</p>'; hint.textContent = ''; return; }
-    const { cols, body } = tableModel(exp, es, ev);
+    const { cols, body, counts } = tableModel(exp, es, ev);
+    lastTableRows = body.length;
+    if (!body.length) { el.innerHTML = '<p class="results-empty">Geçerli satır yok.</p>'; hint.textContent = ''; return; }
     const head = es.copyOpts.header;
     el.innerHTML = `<table class="calc-table">
       <thead><tr${head ? '' : ' class="head-off" title="Başlık satırı kopyalanmayacak"'}>${cols.map((c) => `<th scope="col">${outHead(c)}</th>`).join('')}</tr></thead>
       <tbody>${body.map((row) => `<tr>${row.map((v) => `<td>${esc(Lab.minus(v))}</td>`).join('')}</tr>`).join('')}</tbody>
     </table>`;
     const nRows = body.length + (head ? 1 : 0);
-    hint.innerHTML = `Kopyalanacak alan: <b>${nRows} satır × ${cols.length} sütun</b>${head ? '' : ' (başlıksız)'}. Word’deki hazır tablonuza yapıştırmak için tabloda tam bu boyuttaki hücreleri seçip <b>Ctrl+V</b> yapın. Tablonuzda başlık zaten varsa “Başlık satırı”nı kaldırın.`;
+    const from = counts ? ` — ${counts.map((c) => `${esc(c.tab)} sekmesinden ${c.n} satır`).join(', ')}` : '';
+    hint.innerHTML = `Kopyalanacak alan: <b>${nRows} satır × ${cols.length} sütun</b>${head ? '' : ' (başlıksız)'}${from}. Word’deki hazır tablonuza yapıştırmak için tabloda tam bu boyuttaki hücreleri seçip <b>Ctrl+V</b> yapın. Tablonuzda başlık zaten varsa “Başlık satırı”nı kaldırın.`;
   }
 
   /* ---------- Buton durumları ---------- */
@@ -531,7 +563,7 @@
       b.title = b.disabled ? 'En az bir satır kalmalı' : 'Satırı sil';
     });
     setDisabled($('#dl-png'), !ev.valid.length || !hasPlotly(), hasPlotly() ? 'Önce geçerli veri girin' : 'Grafik kütüphanesi yüklenemedi');
-    setDisabled($('#copy-table'), !ev.valid.length, 'Kopyalanacak geçerli satır yok');
+    setDisabled($('#copy-table'), !lastTableRows, 'Kopyalanacak geçerli satır yok');
     const def = exp.plot(es.xMode);
     setDisabled($('#axes-reset'), es.axes.x === def.xTitle && es.axes.y === def.yTitle, 'Başlıklar zaten varsayılan');
 
@@ -716,7 +748,7 @@
   }
 
   async function copyTable() {
-    if (!lastEval || !lastEval.valid.length) return;
+    if (!lastEval || !lastTableRows) return;
     const { tsv, html, rows, cols } = buildCopy();
     let ok = false;
     try {
@@ -755,6 +787,11 @@
     } else if (t.dataset.copt) {
       es.copyOpts[t.dataset.copt] = t.checked;
       save(); refresh();
+    } else if (t.id === 'copy-format') {
+      es.copyOpts.format = t.value;
+      save(); renderPanel();
+      $('#copy-format').focus();
+      toast(t.value === 'report' ? 'Tablo biçimi: föy tablosu 3.1' : 'Tablo biçimi: özel');
     } else if (t.dataset.popt) {
       es.plotOpts[t.dataset.popt] = t.checked;
       save(); refresh();

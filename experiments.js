@@ -154,6 +154,24 @@ const D3_BASE = {
   ],
   rows: 4,
   calc: d3Calc,
+  // Rapordaki Table 3.1 düzeni: 3a satırları, ardından 3b satırları
+  report: {
+    label: 'Föy tablosu 3.1 (3a + 3b satırları birlikte)',
+    sources: ['d3a', 'd3b'],
+    cols: [
+      { html: 'Row', unit: '', row: true },
+      { html: 'm', unit: 'g', raw: 'm' },
+      { html: 'm<sub>a</sub>', unit: 'g', raw: 'ma' },
+      { html: 't<sub>1</sub>', unit: 's', raw: 't1' },
+      { html: 't<sub>2</sub>', unit: 's', key: 't2p', dec: 3 },
+      { html: 't<sub>3</sub>', unit: 's', raw: 't3' },
+      { html: 'v<sub>1</sub>', unit: 'm/s', key: 'v1', dec: 3 },
+      { html: 'v<sub>2</sub>', unit: 'm/s', key: 'v2', dec: 3 },
+      { html: 'a', unit: 'm/s²', key: 'a', dec: 3 },
+      { html: 'F<sub>a</sub>', unit: 'N', key: 'Fa', dec: 3 },
+      { html: 'Error', unit: '%', key: 'err', dec: 1 },
+    ],
+  },
   outputs: [
     out('t2p', 't<sub>2</sub>', 's'),
     out('v1', 'v<sub>1</sub>', 'm/s'),

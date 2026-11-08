@@ -226,3 +226,4 @@ sub, sup { line-height: 0; }
 .copy-hint { margin-top: var(--s2); }
 .calc-table td:first-child, .calc-table th:first-child { color: inherit; width: auto; }
 .calc-table tr.head-off th { color: var(--muted); text-decoration: line-through; text-decoration-color: var(--border-strong); }
+.copy-format { margin-bottom: var(--s3); }
